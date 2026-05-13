@@ -1,0 +1,16 @@
+.cursor/
+.vscode/
+.idea/
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.obj
+*.o
+*.a
+*.lib
+*.obj
+*.o
+*.a
+data/
