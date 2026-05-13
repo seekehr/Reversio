@@ -1,7 +1,6 @@
 .cursor/
 .vscode/
 .idea/
-*.exe
 *.dll
 *.so
 *.dylib
@@ -14,3 +13,4 @@
 *.o
 *.a
 data/
+.env
