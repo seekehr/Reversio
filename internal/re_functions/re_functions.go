@@ -16,6 +16,7 @@ type Program struct {
 type Function struct {
 	Name       string   `json:"name"`
 	Address    string   `json:"address"`
+	Size       int      `json:"size"`
 	Pseudocode string   `json:"pseudocode"`
 	Imports    []string `json:"imports"`
 	Calls      []string `json:"calls"`
