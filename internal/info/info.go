@@ -29,8 +29,8 @@ func (i *Info) ToJSON() (string, error) {
 	return string(out), nil
 }
 
-func (i *Info) Save(path string) error {
-	if dir := filepath.Dir(path); dir != "" {
+func (i *Info) SavePE(dir string) error {
+	if dir := filepath.Dir(dir); dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
@@ -39,5 +39,5 @@ func (i *Info) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	return os.WriteFile(path, []byte(jsonStr), 0644)
+	return os.WriteFile(dir+"/pe.json", []byte(jsonStr), 0644)
 }

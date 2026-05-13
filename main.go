@@ -68,7 +68,7 @@ func reversio(path string) {
 	fileInfo := info.New()
 	fileInfo.SetPE(peInfo)
 
-	err = fileInfo.Save("./data/info.json")
+	err = fileInfo.SavePE("./data/info.json")
 	if err != nil {
 		fmt.Println("Error saving info:", err)
 		return
