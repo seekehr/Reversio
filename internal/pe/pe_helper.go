@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// machineTypes maps COFF machine type constants to human-readable architecture names.
+// Reference: https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types
 var machineTypes = map[uint16]string{
 	0x0:    "UNKNOWN",
 	0x14c:  "I386",
@@ -27,6 +29,8 @@ var machineTypes = map[uint16]string{
 	0xaa64: "ARM64",
 }
 
+// fileCharacteristics defines COFF header characteristic bit flags that describe
+// attributes of the PE file (executable, DLL, large-address-aware, etc.).
 var fileCharacteristics = []struct {
 	Flag uint16
 	Name string
@@ -48,6 +52,8 @@ var fileCharacteristics = []struct {
 	{0x8000, "BYTES_REVERSED_HI"},
 }
 
+// subsystems maps the PE optional header Subsystem field to a readable name,
+// indicating the environment required to run the image (GUI, console, EFI, etc.).
 var subsystems = map[uint16]string{
 	0:  "UNKNOWN",
 	1:  "NATIVE",
@@ -64,6 +70,8 @@ var subsystems = map[uint16]string{
 	16: "WINDOWS_BOOT_APPLICATION",
 }
 
+// dllCharacteristicFlags defines DLL characteristics bit flags for security
+// features like ASLR (DYNAMIC_BASE), DEP (NX_COMPAT), and Control Flow Guard.
 var dllCharacteristicFlags = []struct {
 	Flag uint16
 	Name string
@@ -81,6 +89,8 @@ var dllCharacteristicFlags = []struct {
 	{0x8000, "TERMINAL_SERVER_AWARE"},
 }
 
+// sectionCharacteristicFlags defines per-section permission and content type flags
+// (executable, readable, writable, contains code/data, etc.).
 var sectionCharacteristicFlags = []struct {
 	Flag uint32
 	Name string
@@ -105,6 +115,7 @@ var sectionCharacteristicFlags = []struct {
 	{0x80000000, "MEM_WRITE"},
 }
 
+// resourceTypes maps PE resource type IDs to their well-known names.
 var resourceTypes = map[uint32]string{
 	1:  "RT_CURSOR",
 	2:  "RT_BITMAP",
@@ -129,6 +140,8 @@ var resourceTypes = map[uint32]string{
 	24: "RT_MANIFEST",
 }
 
+// dataDirectoryNames provides the canonical name for each of the 16 data directory
+// entries in the PE optional header (indices 0-15).
 var dataDirectoryNames = [16]string{
 	"Export Table",
 	"Import Table",
@@ -148,6 +161,7 @@ var dataDirectoryNames = [16]string{
 	"Reserved",
 }
 
+// machineToString converts a COFF machine type constant to its string representation.
 func machineToString(m uint16) string {
 	if s, ok := machineTypes[m]; ok {
 		return s
@@ -155,6 +169,7 @@ func machineToString(m uint16) string {
 	return fmt.Sprintf("UNKNOWN(0x%X)", m)
 }
 
+// fileCharsToString decodes a COFF characteristics bitmask into a pipe-separated string of flag names.
 func fileCharsToString(c uint16) string {
 	var flags []string
 	for _, f := range fileCharacteristics {
@@ -168,6 +183,7 @@ func fileCharsToString(c uint16) string {
 	return strings.Join(flags, " | ")
 }
 
+// subsystemToString converts a PE subsystem ID to its human-readable name.
 func subsystemToString(s uint16) string {
 	if name, ok := subsystems[s]; ok {
 		return name
@@ -175,6 +191,7 @@ func subsystemToString(s uint16) string {
 	return fmt.Sprintf("UNKNOWN(%d)", s)
 }
 
+// dllCharsToString decodes a DLL characteristics bitmask into a pipe-separated string of flag names.
 func dllCharsToString(c uint16) string {
 	var flags []string
 	for _, f := range dllCharacteristicFlags {
@@ -188,6 +205,7 @@ func dllCharsToString(c uint16) string {
 	return strings.Join(flags, " | ")
 }
 
+// sectionCharsToString decodes section characteristics into a pipe-separated string of flag names.
 func sectionCharsToString(c uint32) string {
 	var flags []string
 	for _, f := range sectionCharacteristicFlags {
@@ -201,6 +219,7 @@ func sectionCharsToString(c uint32) string {
 	return strings.Join(flags, " | ")
 }
 
+// resourceTypeToString converts a resource type ID to its well-known name (e.g. RT_ICON).
 func resourceTypeToString(id uint32) string {
 	if s, ok := resourceTypes[id]; ok {
 		return s

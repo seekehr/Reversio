@@ -1,3 +1,6 @@
+// Package rag implements chunking logic for Retrieval-Augmented Generation (RAG).
+// It transforms structured analysis data (PE metadata, decompiled functions) into
+// text chunks suitable for embedding and semantic search by an LLM.
 package rag
 
 import (
@@ -9,12 +12,17 @@ import (
 	"github.com/seekehr/reversio/internal/re_functions"
 )
 
+// Chunk represents a single unit of information for RAG indexing.
+// Each chunk has a unique ID, a type category for filtering, and
+// a text content string optimized for embedding similarity search.
 type Chunk struct {
 	ID      string
 	Type    string
 	Content string
 }
 
+// Chunker takes all available analysis data and produces a flat slice of Chunks.
+// It delegates to specialized chunkers for each data type (PE headers, functions, etc.).
 func Chunker(i *info.Info) []Chunk {
 	var chunks []Chunk
 
@@ -29,6 +37,10 @@ func Chunker(i *info.Info) []Chunk {
 	return chunks
 }
 
+// chunkPE breaks PE metadata into individual chunks: one combined headers chunk,
+// plus separate chunks for each data directory, section, import, export, resource,
+// and TLS callback. This granularity allows the LLM to retrieve only the relevant
+// PE details for a given query.
 func chunkPE(p *pe.PEInfo) []Chunk {
 	var chunks []Chunk
 
@@ -116,6 +128,9 @@ func chunkPE(p *pe.PEInfo) []Chunk {
 	return chunks
 }
 
+// chunkFunctions creates one chunk per decompiled function, combining the function's
+// metadata (name, address, size) with its pseudocode, imports, calls, and strings
+// into a single self-contained text block for embedding.
 func chunkFunctions(prog *re_functions.Program) []Chunk {
 	chunks := make([]Chunk, 0, len(prog.Functions))
 

@@ -9,10 +9,15 @@ import (
 	"time"
 )
 
+// Load opens a PE file using the standard library's debug/pe parser.
 func Load(path string) (*pe.File, error) {
 	return pe.Open(path)
 }
 
+// Parse performs a full parse of the PE file at the given path, extracting all
+// major structural components. It uses both the standard library PE parser (for
+// structured access) and raw bytes (for manual parsing of export/resource/TLS tables
+// that the stdlib doesn't fully expose).
 func Parse(path string) (*PEInfo, error) {
 	peFile, err := pe.Open(path)
 	if err != nil {
@@ -20,6 +25,7 @@ func Parse(path string) (*PEInfo, error) {
 	}
 	defer peFile.Close()
 
+	// Raw bytes are needed for manual parsing of structures the stdlib doesn't expose
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -52,6 +58,8 @@ func Parse(path string) (*PEInfo, error) {
 // DOS Header
 // ---------------------------------------------------------------------------
 
+// parseDOSHeader validates the DOS "MZ" magic bytes and extracts e_lfanew,
+// which is the file offset (at byte 60) pointing to the PE signature.
 func parseDOSHeader(raw []byte) (DOSHeaderInfo, error) {
 	if len(raw) < 64 {
 		return DOSHeaderInfo{}, fmt.Errorf("file too small for DOS header")
@@ -70,6 +78,8 @@ func parseDOSHeader(raw []byte) (DOSHeaderInfo, error) {
 // PE Signature
 // ---------------------------------------------------------------------------
 
+// parsePESignature verifies the 4-byte PE signature ("PE\0\0") at the offset
+// specified by the DOS header's e_lfanew field.
 func parsePESignature(raw []byte, offset uint32) (string, error) {
 	end := offset + 4
 	if uint32(len(raw)) < end {
@@ -86,6 +96,8 @@ func parsePESignature(raw []byte, offset uint32) (string, error) {
 // COFF / File Header
 // ---------------------------------------------------------------------------
 
+// parseCOFFHeader extracts machine type, section count, timestamp, and
+// characteristics flags from the COFF file header.
 func parseCOFFHeader(f *pe.File) COFFHeaderInfo {
 	h := f.FileHeader
 	return COFFHeaderInfo{
@@ -101,6 +113,9 @@ func parseCOFFHeader(f *pe.File) COFFHeaderInfo {
 // Optional Header
 // ---------------------------------------------------------------------------
 
+// parseOptionalHeader extracts key fields from the PE optional header, handling
+// both PE32 (32-bit) and PE32+ (64-bit) variants. It also builds the data
+// directory table with human-readable names for each entry.
 func parseOptionalHeader(f *pe.File) OptionalHeaderInfo {
 	dirs := getDataDirectories(f)
 	ddInfos := make([]DataDirectoryInfo, len(dirs))
@@ -152,6 +167,8 @@ func parseOptionalHeader(f *pe.File) OptionalHeaderInfo {
 // Section Table
 // ---------------------------------------------------------------------------
 
+// parseSections iterates over all PE sections and extracts their names, sizes,
+// addresses, and permission/characteristic flags.
 func parseSections(f *pe.File) []SectionInfo {
 	out := make([]SectionInfo, len(f.Sections))
 	for i, s := range f.Sections {
@@ -171,6 +188,9 @@ func parseSections(f *pe.File) []SectionInfo {
 // Import Table
 // ---------------------------------------------------------------------------
 
+// parseImports extracts the import table, grouping imported function names by
+// their source DLL. The stdlib returns symbols in "dll:function" format which
+// we split and reorganize into a per-library structure.
 func parseImports(f *pe.File) []ImportEntry {
 	symbols, err := f.ImportedSymbols()
 	if err != nil || len(symbols) == 0 {
@@ -206,8 +226,12 @@ func parseImports(f *pe.File) []ImportEntry {
 // Export Table
 // ---------------------------------------------------------------------------
 
+// parseExports manually parses the export directory table from raw bytes since
+// the Go stdlib does not expose full export details. It resolves function names
+// via the name-ordinal lookup table and returns nil if no exports exist.
 func parseExports(f *pe.File, raw []byte) *ExportInfo {
 	dirs := getDataDirectories(f)
+	// dirs[0] = Export Table (index 0 per PE spec data directory layout)
 	if len(dirs) < 1 || dirs[0].VirtualAddress == 0 {
 		return nil
 	}
@@ -285,8 +309,11 @@ func parseExports(f *pe.File, raw []byte) *ExportInfo {
 // Resource Table
 // ---------------------------------------------------------------------------
 
+// parseResources walks the PE resource directory tree (up to 3 levels deep:
+// type -> name/ID -> language) and flattens all leaf entries into a slice.
 func parseResources(f *pe.File, raw []byte) []ResourceEntry {
 	dirs := getDataDirectories(f)
+	// dirs[2] = Resource Table (index 2 per PE spec data directory layout)
 	if len(dirs) <= 2 || dirs[2].VirtualAddress == 0 {
 		return nil
 	}
@@ -301,6 +328,9 @@ func parseResources(f *pe.File, raw []byte) []ResourceEntry {
 	return entries
 }
 
+// walkResourceDir recursively traverses the resource directory tree.
+// depth 0 = resource type, depth 1 = resource name/ID, depth 2 = language.
+// The high bit of dataOff indicates a subdirectory vs. a data entry leaf.
 func walkResourceDir(raw []byte, base, offset uint32, depth int, typeID uint32, name string, out *[]ResourceEntry) {
 	if depth > 3 || int(offset)+16 > len(raw) {
 		return
@@ -322,14 +352,20 @@ func walkResourceDir(raw []byte, base, offset uint32, depth int, typeID uint32, 
 		curType := typeID
 		curName := name
 
+		// High bit (0x80000000) of nameOrID: if set, the remaining bits are an offset
+		// to a name string; if clear, the value is a numeric ID.
 		switch depth {
 		case 0:
+			// At depth 0, nameOrID is a resource type (RT_ICON, RT_MANIFEST, etc.).
+			// The high bit technically indicates a named type vs numeric ID, but both
+			// paths just strip the bit and use as a type ID for lookup.
 			if nameOrID&0x80000000 != 0 {
 				curType = nameOrID & 0x7FFFFFFF
 			} else {
 				curType = nameOrID
 			}
 		case 1:
+			// At depth 1, nameOrID identifies the specific resource instance.
 			if nameOrID&0x80000000 != 0 {
 				strOff := base + (nameOrID & 0x7FFFFFFF)
 				curName = readResourceName(raw, strOff)
@@ -365,6 +401,10 @@ func walkResourceDir(raw []byte, base, offset uint32, depth int, typeID uint32, 
 	}
 }
 
+// readResourceName reads a length-prefixed UTF-16LE resource name string,
+// extracting only the low byte of each character (ASCII-safe approximation).
+// LIMITATION: Non-ASCII resource names (e.g. CJK characters) will be corrupted
+// since the high byte of each UTF-16 code unit is discarded.
 func readResourceName(raw []byte, offset uint32) string {
 	if int(offset)+2 > len(raw) {
 		return ""
@@ -385,8 +425,12 @@ func readResourceName(raw []byte, offset uint32) string {
 // TLS Callbacks
 // ---------------------------------------------------------------------------
 
+// parseTLSCallbacks extracts Thread Local Storage callback addresses from the
+// TLS directory. These callbacks execute before the entry point and are commonly
+// used for anti-debugging or initialization. Handles both 32-bit and 64-bit TLS structures.
 func parseTLSCallbacks(f *pe.File, raw []byte) []uint64 {
 	dirs := getDataDirectories(f)
+	// dirs[9] = TLS Table (index 9 per PE spec data directory layout)
 	if len(dirs) <= 9 || dirs[9].VirtualAddress == 0 {
 		return nil
 	}
@@ -416,6 +460,9 @@ func parseTLSCallbacks(f *pe.File, raw []byte) []uint64 {
 		return nil
 	}
 
+	// WARNING: If the PE is malformed and callbacksVA < imageBase, this subtraction
+	// causes uint64 underflow, and the uint32 truncation produces a garbage RVA.
+	// rvaToOffset will likely return false, so this fails safely but silently.
 	cbRVA := uint32(callbacksVA - imageBase)
 	cbOff, ok := rvaToOffset(f.Sections, cbRVA)
 	if !ok {
@@ -450,6 +497,8 @@ func parseTLSCallbacks(f *pe.File, raw []byte) []uint64 {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// getDataDirectories returns the data directory slice from the optional header,
+// supporting both PE32 and PE32+ formats.
 func getDataDirectories(f *pe.File) []pe.DataDirectory {
 	switch oh := f.OptionalHeader.(type) {
 	case *pe.OptionalHeader32:
@@ -461,6 +510,7 @@ func getDataDirectories(f *pe.File) []pe.DataDirectory {
 	}
 }
 
+// getImageBase returns the preferred load address of the PE image in memory.
 func getImageBase(f *pe.File) uint64 {
 	switch oh := f.OptionalHeader.(type) {
 	case *pe.OptionalHeader32:
@@ -472,11 +522,17 @@ func getImageBase(f *pe.File) uint64 {
 	}
 }
 
+// is64Bit returns true if the PE file has a 64-bit optional header (PE32+).
 func is64Bit(f *pe.File) bool {
 	_, ok := f.OptionalHeader.(*pe.OptionalHeader64)
 	return ok
 }
 
+// rvaToOffset converts a Relative Virtual Address (RVA) to a raw file offset
+// by finding which section contains the RVA and applying the section's base offset.
+// LIMITATION: Some PE packers set VirtualSize to 0 (the Windows loader then uses
+// SizeOfRawData instead). This function will fail to resolve RVAs in such sections,
+// returning (0, false) even though the data exists in the file.
 func rvaToOffset(sections []*pe.Section, rva uint32) (uint32, bool) {
 	for _, s := range sections {
 		if rva >= s.VirtualAddress && rva < s.VirtualAddress+s.VirtualSize {
@@ -486,6 +542,7 @@ func rvaToOffset(sections []*pe.Section, rva uint32) (uint32, bool) {
 	return 0, false
 }
 
+// readCString reads a null-terminated C string from the byte slice at the given offset.
 func readCString(data []byte, offset uint32) string {
 	if int(offset) >= len(data) {
 		return ""

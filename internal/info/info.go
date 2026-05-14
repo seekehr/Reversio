@@ -1,3 +1,5 @@
+// Package info aggregates all analysis results (PE metadata + decompiled functions)
+// into a single structure and handles JSON serialization/deserialization to disk.
 package info
 
 import (
@@ -10,23 +12,29 @@ import (
 	"github.com/seekehr/reversio/internal/re_functions"
 )
 
+// Info is the top-level container that holds all extracted data about a binary.
+// Each field is optional so partial analyses (e.g. PE-only) are supported.
 type Info struct {
 	PE        *pe.PEInfo            `json:"pe,omitempty"`
 	Functions *re_functions.Program `json:"functions,omitempty"`
 }
 
+// New creates an empty Info ready to be populated with analysis results.
 func New() *Info {
 	return &Info{}
 }
 
+// SetPE attaches parsed PE header/section/import data to this Info instance.
 func (i *Info) SetPE(peInfo *pe.PEInfo) {
 	i.PE = peInfo
 }
 
+// SetFunctions attaches Ghidra-decompiled function data to this Info instance.
 func (i *Info) SetFunctions(functions *re_functions.Program) {
 	i.Functions = functions
 }
 
+// ToJSON serializes the entire Info structure to a pretty-printed JSON string.
 func (i *Info) ToJSON() (string, error) {
 	out, err := json.MarshalIndent(i, "", "  ")
 	if err != nil {
@@ -35,6 +43,9 @@ func (i *Info) ToJSON() (string, error) {
 	return string(out), nil
 }
 
+// FromJSON reconstructs an Info from previously saved JSON files in the given directory.
+// It looks for pe.json and functions.json, skipping any that don't exist (allowing
+// partial data loads).
 func FromJSON(dir string) (*Info, error) {
 	i := &Info{}
 
@@ -78,6 +89,9 @@ func FromJSON(dir string) (*Info, error) {
 	return i, nil
 }
 
+// SaveInfo persists each non-nil analysis component as a separate JSON file
+// in the given directory (pe.json, functions.json). The directory is created
+// if it doesn't exist.
 func (i *Info) SaveInfo(dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -94,6 +108,11 @@ func (i *Info) SaveInfo(dir string) error {
 	}
 
 	for _, s := range savers {
+		// CAVEAT: Go nil-interface gotcha. A typed nil pointer (e.g. (*pe.PEInfo)(nil))
+		// stored in an `any` field is NOT == nil. If a field is a nil pointer,
+		// this check passes and json.MarshalIndent writes "null" to the file.
+		// Currently safe because Set* methods are only called with non-nil values,
+		// but callers must be aware of this subtlety.
 		if s.data == nil {
 			continue
 		}
