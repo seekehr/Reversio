@@ -127,4 +127,11 @@ func reversio(path string) {
 		return
 	}
 	fmt.Printf("Embedded %d chunks (dim=%d).\n", len(embedded), len(embedded[0].Embedding))
+
+	fmt.Println("Storing in Qdrant...")
+	if err := rag.Upsert(embedded); err != nil {
+		fmt.Println("Error upserting to Qdrant:", err)
+		return
+	}
+	fmt.Printf("Stored %d vectors in Qdrant.\n", len(embedded))
 }
