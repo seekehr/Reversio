@@ -1,0 +1,82 @@
+services:
+  reversio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reversio
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./data:/app/data
+      - ./samples:/app/samples
+    networks:
+      - reversio-net
+    depends_on:
+      ollama-setup:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: reversio-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - reversio-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: reversio-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - reversio-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # One-shot service to pull the required embedding model
+  ollama-setup:
+    image: curlimages/curl:latest
+    container_name: reversio-ollama-setup
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - reversio-net
+    entrypoint: >
+      sh -c "
+        echo 'Pulling qwen3-embedding:4b model...' &&
+        curl -sf http://ollama:11434/api/pull -d '{\"name\": \"qwen3-embedding:4b\"}' &&
+        echo 'Model ready.'
+      "
+
+networks:
+  reversio-net:
+    driver: bridge
+
+volumes:
+  qdrant-data:
+  ollama-data:

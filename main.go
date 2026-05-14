@@ -86,7 +86,11 @@ func reversio(path string) {
 	}
 
 	fmt.Println("Parsing functions...")
-	headlessPath := filepath.Join(os.Getenv("HEADLESS_GHIDRA_PATH"), "analyzeHeadless.bat")
+	headlessScript := "analyzeHeadless.bat"
+	if _, err := os.Stat(filepath.Join(os.Getenv("HEADLESS_GHIDRA_PATH"), headlessScript)); err != nil {
+		headlessScript = "analyzeHeadless"
+	}
+	headlessPath := filepath.Join(os.Getenv("HEADLESS_GHIDRA_PATH"), headlessScript)
 	err = re_functions.Load(headlessPath, os.Getenv("GHIDRA_PROJECT_PATH"), os.Getenv("GHIDRA_SCRIPTS_PATH"), path)
 	if err != nil {
 		fmt.Println("Error loading functions:", err)

@@ -5,13 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 )
 
 const (
-	ollamaEmbedURL = "http://localhost:11434/api/embed"
 	embeddingModel = "qwen3-embedding:4b"
 	batchSize      = 64
 )
+
+func ollamaEmbedURL() string {
+	if host := os.Getenv("OLLAMA_HOST"); host != "" {
+		return host + "/api/embed"
+	}
+	return "http://localhost:11434/api/embed"
+}
 
 // EmbeddedChunk pairs a Chunk with its float64 embedding vector.
 type EmbeddedChunk struct {
@@ -78,7 +85,7 @@ func callOllamaEmbed(texts []string) ([][]float64, error) {
 		return nil, err
 	}
 
-	resp, err := http.Post(ollamaEmbedURL, "application/json", bytes.NewReader(body))
+	resp, err := http.Post(ollamaEmbedURL(), "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("ollama request failed: %w", err)
 	}
