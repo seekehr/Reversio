@@ -17,6 +17,11 @@ var (
 	promptLoadErr      error
 )
 
+func normalizeNewlines(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\r", "\n")
+}
+
 func loadSystemPrompt() (string, error) {
 	promptOnce.Do(func() {
 		data, err := os.ReadFile(promptPath)
@@ -25,17 +30,17 @@ func loadSystemPrompt() (string, error) {
 			return
 		}
 
-		raw := string(data)
-		const sysPrefix = "SYSTEM:\n"
-		const userMarker = "\nUSER QUESTION:"
+		raw := normalizeNewlines(string(data))
+		const sysHeader = "SYSTEM:"
+		const userHeader = "USER QUESTION:"
 
-		sysStart := strings.Index(raw, sysPrefix)
-		userStart := strings.Index(raw, userMarker)
-		if sysStart == -1 || userStart == -1 {
+		sysIdx := strings.Index(raw, sysHeader)
+		userIdx := strings.Index(raw, userHeader)
+		if sysIdx == -1 || userIdx == -1 || userIdx <= sysIdx {
 			promptLoadErr = fmt.Errorf("prompt.txt missing SYSTEM or USER QUESTION markers")
 			return
 		}
-		cachedSystemPrompt = strings.TrimSpace(raw[sysStart+len(sysPrefix) : userStart])
+		cachedSystemPrompt = strings.TrimSpace(raw[sysIdx+len(sysHeader):userIdx])
 	})
 	return cachedSystemPrompt, promptLoadErr
 }
