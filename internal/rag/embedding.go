@@ -76,6 +76,19 @@ func Embed(chunks []Chunk) ([]EmbeddedChunk, error) {
 	return embedded, nil
 }
 
+// EmbedQuery embeds a single text string (e.g. a user question) and returns
+// its vector. Useful for Qdrant nearest-neighbor queries.
+func EmbedQuery(text string) ([]float64, error) {
+	vectors, err := callOllamaEmbed([]string{text})
+	if err != nil {
+		return nil, err
+	}
+	if len(vectors) != 1 {
+		return nil, fmt.Errorf("expected 1 embedding, got %d", len(vectors))
+	}
+	return vectors[0], nil
+}
+
 func callOllamaEmbed(texts []string) ([][]float64, error) {
 	body, err := json.Marshal(embedRequest{
 		Model: embeddingModel,

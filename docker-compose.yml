@@ -19,6 +19,7 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - QDRANT_HOST=http://qdrant:6333
+      - GROQ_API_KEY=${GROQ_API_KEY}
 
   qdrant:
     image: qdrant/qdrant:latest

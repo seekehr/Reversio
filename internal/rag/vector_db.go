@@ -17,6 +17,71 @@ func qdrantURL() string {
 	return "http://localhost:6333"
 }
 
+// SearchResult holds a single Qdrant search hit with its payload and score.
+type SearchResult struct {
+	ChunkID string
+	Type    string
+	Content string
+	Score   float64
+}
+
+type searchResponse struct {
+	Result []struct {
+		Score   float64        `json:"score"`
+		Payload map[string]any `json:"payload"`
+	} `json:"result"`
+}
+
+// Search finds the topK nearest chunks to queryVector in Qdrant.
+func Search(queryVector []float64, topK int) ([]SearchResult, error) {
+	body, err := json.Marshal(map[string]any{
+		"vector":       queryVector,
+		"limit":        topK,
+		"with_payload": true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Post(
+		fmt.Sprintf("%s/collections/%s/points/search", qdrantURL(), collectionName),
+		"application/json",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("qdrant request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var buf bytes.Buffer
+		buf.ReadFrom(resp.Body)
+		return nil, fmt.Errorf("qdrant returned %d: %s", resp.StatusCode, buf.String())
+	}
+
+	var sr searchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+		return nil, fmt.Errorf("decoding search response: %w", err)
+	}
+
+	results := make([]SearchResult, len(sr.Result))
+	for i, hit := range sr.Result {
+		results[i] = SearchResult{
+			Score: hit.Score,
+		}
+		if v, ok := hit.Payload["chunk_id"].(string); ok {
+			results[i].ChunkID = v
+		}
+		if v, ok := hit.Payload["type"].(string); ok {
+			results[i].Type = v
+		}
+		if v, ok := hit.Payload["content"].(string); ok {
+			results[i].Content = v
+		}
+	}
+	return results, nil
+}
+
 // Upsert recreates the Qdrant collection and inserts all embedded chunks,
 // destroying any previously stored data in the collection.
 func Upsert(embedded []EmbeddedChunk) error {

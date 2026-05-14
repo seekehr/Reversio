@@ -131,13 +131,16 @@ docker run -p 6333:6333 -p 6334:6334 -v qdrant_data:/qdrant/storage qdrant/qdran
 Copy-Item .example.env .env
 ```
 
-Edit `.env` with your local paths:
+Edit `.env` with your local paths and API key:
 
 ```env
 HEADLESS_GHIDRA_PATH=C:\ghidra\support
 GHIDRA_PROJECT_PATH=C:\ghidra-projects
 GHIDRA_SCRIPTS_PATH=C:\Users\YourName\reversio\resources\ghidra_scripts
+GROQ_API_KEY=gsk_your_api_key_here
 ```
+
+Get a free Groq API key at https://console.groq.com/keys
 
 **6. Run**
 
@@ -161,3 +164,5 @@ Then in the REPL:
 | `GHIDRA_PROJECT_PATH` | Directory where Ghidra stores its project files | `C:\ghidra-projects` |
 | `GHIDRA_SCRIPTS_PATH` | Directory containing `ExportFunctions.java` | `.\resources\ghidra_scripts` |
 | `OLLAMA_HOST` | Ollama base URL (optional, defaults to `http://localhost:11434`) | `http://ollama:11434` |
+| `QDRANT_HOST` | Qdrant base URL (optional, defaults to `http://localhost:6333`) | `http://qdrant:6333` |
+| `GROQ_API_KEY` | Groq API key for LLM queries ([get one here](https://console.groq.com/keys)) | `gsk_...` |
