@@ -94,11 +94,15 @@ func reversio(path string) {
 	}
 	fmt.Println("Functions loaded...")
 
-	// NOTE: re_functions.Load() runs Ghidra but its output (functions JSON) is never
-	// parsed back via re_functions.Parse() nor attached via fileInfo.SetFunctions().
-	// As a result, only PE data is saved; decompiled functions are lost.
+	funcInfo, err := re_functions.Parse("./data/functions.json")
+	if err != nil {
+		fmt.Println("Error parsing functions JSON:", err)
+		return
+	}
+
 	fileInfo := info.New()
 	fileInfo.SetPE(peInfo)
+	fileInfo.SetFunctions(funcInfo)
 
 	err = fileInfo.SaveInfo("./data")
 	if err != nil {
@@ -110,5 +114,13 @@ func reversio(path string) {
 
 	fmt.Println("Chunking...")
 	chunks := rag.Chunker(fileInfo)
+	fmt.Printf("Created %d chunks.\n", len(chunks))
 
+	fmt.Println("Embedding chunks via Ollama (qwen3-embedding:4b)...")
+	embedded, err := rag.Embed(chunks)
+	if err != nil {
+		fmt.Println("Error embedding chunks:", err)
+		return
+	}
+	fmt.Printf("Embedded %d chunks (dim=%d).\n", len(embedded), len(embedded[0].Embedding))
 }

@@ -45,13 +45,14 @@ func Load(headlessGhidraPath string, ghidraProjectPath string, ghidraScriptsPath
 		ghidraProjectPath,
 		"reversio",
 		"-import", executablePath,
+		"-overwrite",
 		"-scriptPath", ghidraScriptsPath,
 		"-postScript", "ExportFunctions.java",
 	)
 
-	output, err := cmd.CombinedOutput()
+	_, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("ghidra headless analysis failed: %w\nOutput: %s", err, string(output))
+		return fmt.Errorf("ghidra headless analysis failed: %w", err)
 	}
 
 	return nil

@@ -121,7 +121,7 @@ public class ExportFunctions extends GhidraScript {
 
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-        String outputPath = "C:\\Users\\Hp\\Documents\\Reversio\\data\\functions.json";
+        String outputPath = "data\\functions.json";
         try (FileWriter writer = new FileWriter(outputPath)) {
             writer.write(gson.toJson(root));
         }
